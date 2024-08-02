@@ -260,6 +260,11 @@ static void mic_stream_task(void *args)
     {
         if (i2s_channel_read(rx_chan, r_buf, MIC_CHUNK_SIZE * sizeof(int32_t), &r_bytes, 1000) == ESP_OK)
         {
+            // 1000ms in the above call should be more than enough
+            // to receive full chunk. Not receiving it most likely
+            // signifies a bug.
+            assert(r_bytes == (MIC_CHUNK_SIZE * sizeof(int32_t)));
+
             for (size_t i = 0; i < MIC_CHUNK_SIZE; i++)
             {
                 input[idx][MIC_OFFSET + i] = (float)(r_buf[i] >> 14);

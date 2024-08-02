@@ -1178,11 +1178,28 @@ typedef struct
 
 static void preemphasis(float input[SAMPLE_LEN])
 {
-    for (size_t i = SAMPLE_LEN - 1; i > 0; i--)
+    float output_prev = input[0];
+
+    for (size_t i = 1; i < SAMPLE_LEN; i++)
     {
-        input[i] = input[i] - PREEMP_COEFF * input[i - 1];
+        float out = input[i] - PREEMP_COEFF * input[i - 1];
+        input[i - 1] = output_prev;
+        output_prev = out;
     }
-    input[0] = 0.0f;
+    input[SAMPLE_LEN - 1] = output_prev;
+}
+
+static void dcblock(float input[SAMPLE_LEN])
+{
+    float output_prev = input[0];
+
+    for (size_t i = 1; i < SAMPLE_LEN; i++)
+    {
+        float out = input[i] - input[i - 1] + 0.95 * output_prev;
+        input[i - 1] = output_prev;
+        output_prev = out;
+    }
+    input[SAMPLE_LEN - 1] = output_prev;
 }
 
 static unsigned int msb_index(unsigned int _x)
@@ -1336,6 +1353,7 @@ void fbank(float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
 {
     size_t frame_num = 0;
 
+    dcblock(input);
     preemphasis(input);
 
     for (size_t i = 0; i < SAMPLE_LEN; i += FRAME_STEP)
