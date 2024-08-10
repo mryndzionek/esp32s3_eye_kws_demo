@@ -23,5 +23,5 @@ Here is for example a ONNX graph exported directly from PyTorch:
 ![graph](images/pytorch_graph.png)
 
 and [this](https://github.com/mryndzionek/esp32s3_eye_kws_demo/blob/main/main/fast_rnn.c) is
-all the "manually-transpiled" code needed for inference (~150 LoCs of C) ...
+all the "manually-transpiled" code needed for inference (~160 LoCs of C) ...
 
