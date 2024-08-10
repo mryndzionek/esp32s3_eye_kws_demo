@@ -50,7 +50,7 @@
 #define MIC_CHUNK_SIZE (SAMPLE_LEN / 4)
 #define MIC_OFFSET (SAMPLE_LEN - MIC_CHUNK_SIZE)
 
-#define DETECTION_THRESHOLD (4.0f)
+#define DETECTION_THRESHOLD (3.5f)
 
 typedef struct
 {
@@ -82,7 +82,7 @@ static const uint16_t palette[256] = {
 // clang-format on
 
 static i2s_chan_handle_t rx_chan;
-static int32_t r_buf[MIC_CHUNK_SIZE];
+static int32_t r_buf[2][MIC_CHUNK_SIZE];
 static float input[SAMPLE_LEN];
 static float features[NUM_FRAMES][NUM_FILT];
 
@@ -137,7 +137,7 @@ static void draw_features(float features[NUM_FRAMES][NUM_FILT])
     {
         for (size_t j = 0; j < BOARD_LCD_H_RES; j++)
         {
-            int32_t idx = ((features[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i] + 0.5) * 255) / 2.5;
+            int32_t idx = ((features[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i] + 0.3) * 255) / 2.0;
             if (idx < 0)
             {
                 idx = 0;
@@ -256,6 +256,7 @@ static void init_lcd(void)
 
 static void mic_stream_task(void *args)
 {
+    size_t hand = 0;
     size_t r_bytes = 0;
     mic_task_ctx_t *mic_task_ctx = args;
 
@@ -266,28 +267,22 @@ static void mic_stream_task(void *args)
 
     while (true)
     {
-        if (i2s_channel_read(rx_chan, r_buf, MIC_CHUNK_SIZE * sizeof(int32_t), &r_bytes, 500) == ESP_OK)
+        if (i2s_channel_read(rx_chan, r_buf[hand], MIC_CHUNK_SIZE * sizeof(int32_t), &r_bytes, 500) == ESP_OK)
         {
+            assert(r_bytes == (MIC_CHUNK_SIZE * sizeof(int32_t)));
+
             // 500ms in the above call should be more than enough
             // to receive full chunk. Not receiving it most likely
             // signifies a bug.
-            assert(r_bytes == (MIC_CHUNK_SIZE * sizeof(int32_t)));
             if (xSemaphoreTake(mic_task_ctx->sync_sema, 0) == pdFALSE)
             {
                 ESP_LOGW(TAG, "Real-time constraint between the mic task and main task violated.");
             }
 
-            memmove(input, &input[MIC_CHUNK_SIZE], MIC_OFFSET * sizeof(float));
-
-            for (size_t i = 0; i < MIC_CHUNK_SIZE; i++)
-            {
-                input[MIC_OFFSET + i] = (float)(r_buf[i] >> 13);
-            }
-            fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
-
-            float *item = input;
+            int32_t *item = r_buf[hand];
             BaseType_t res = xQueueSend(mic_task_ctx->mic_q, &item, 0);
             assert(res == pdPASS);
+            hand ^= 1;
         }
         else
         {
@@ -301,8 +296,8 @@ void app_main(void)
     size_t label;
     float logit;
     int64_t ts;
-    float *data;
-    bool debounce_active = false;
+    int32_t *data;
+    size_t debounce_count = 0;
     uint32_t count = 0;
 
     /* Print chip information */
@@ -341,7 +336,7 @@ void app_main(void)
 
     mic_task_ctx_t mic_task_ctx;
 
-    mic_task_ctx.mic_q = xQueueCreate(1, sizeof(float *));
+    mic_task_ctx.mic_q = xQueueCreate(1, sizeof(int32_t *));
     assert(mic_task_ctx.mic_q);
     mic_task_ctx.sync_sema = xSemaphoreCreateBinary();
     assert(mic_task_ctx.sync_sema);
@@ -357,7 +352,15 @@ void app_main(void)
             ESP_LOGD(TAG, "Received mic data");
             ts = esp_timer_get_time();
 
-            fbank(data, features);
+            memmove(input, &input[MIC_CHUNK_SIZE], MIC_OFFSET * sizeof(float));
+
+            for (size_t i = 0; i < MIC_CHUNK_SIZE; i++)
+            {
+                input[MIC_OFFSET + i] = (float)(data[i] >> 14);
+            }
+
+            fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
+            fbank(input, features);
             for (size_t i = 0; i < NUM_FRAMES; i++)
             {
                 fbank_norm(features[i]);
@@ -367,44 +370,48 @@ void app_main(void)
 
             ts = esp_timer_get_time() - ts;
             ESP_LOGD(TAG, "Infer took %lld ms", ts / 1000);
-            if (debounce_active)
+            if (debounce_count)
             {
                 if (label == 0)
                 {
-                    debounce_active = false;
+                    debounce_count--;
                 }
             }
             else
             {
-                if ((label > 0) && (logit >= DETECTION_THRESHOLD))
+                if (label > 0)
                 {
                     ESP_LOGI(TAG, "label: '%s', label_idx: %u, logit: %f, inf_time: %lldms",
                              fbank_label_idx_to_str(label), label, logit, ts / 1000);
-                    debounce_active = true;
-                    switch (label)
+                    if (logit >= DETECTION_THRESHOLD)
                     {
-                    case 1:
-                        draw_bmp((const uint32_t *)left_bmp, false);
-                        break;
+                        ESP_LOGI(TAG,"Detection above threshold");
+                        debounce_count = 3;
+                        switch (label)
+                        {
+                        case 1:
+                            draw_bmp((const uint32_t *)left_bmp, false);
+                            break;
 
-                    case 2:
-                        draw_bmp((const uint32_t *)right_bmp, false);
-                        break;
+                        case 2:
+                            draw_bmp((const uint32_t *)right_bmp, false);
+                            break;
 
-                    case 3:
-                        draw_bmp((const uint32_t *)up_bmp, false);
-                        break;
+                        case 3:
+                            draw_bmp((const uint32_t *)up_bmp, false);
+                            break;
 
-                    case 4:
-                        draw_bmp((const uint32_t *)down_bmp, false);
-                        break;
+                        case 4:
+                            draw_bmp((const uint32_t *)down_bmp, false);
+                            break;
 
-                    case 5:
-                        draw_bmp((const uint32_t *)stop_bmp, false);
-                        break;
+                        case 5:
+                            draw_bmp((const uint32_t *)stop_bmp, false);
+                            break;
 
-                    default:
-                        break;
+                        default:
+                            break;
+                        }
                     }
                 }
                 else
