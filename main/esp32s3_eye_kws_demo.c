@@ -52,6 +52,12 @@
 
 #define DETECTION_THRESHOLD (4.0f)
 
+typedef struct
+{
+    QueueHandle_t mic_q;
+    SemaphoreHandle_t sync_sema;
+} mic_task_ctx_t;
+
 static const char *TAG = "esp32s3_eye_kws_demo";
 
 // clang-format off
@@ -251,7 +257,7 @@ static void init_lcd(void)
 static void mic_stream_task(void *args)
 {
     size_t r_bytes = 0;
-    QueueHandle_t mic_q = args;
+    mic_task_ctx_t *mic_task_ctx = args;
 
     init_mic();
     ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));
@@ -260,12 +266,16 @@ static void mic_stream_task(void *args)
 
     while (true)
     {
-        if (i2s_channel_read(rx_chan, r_buf, MIC_CHUNK_SIZE * sizeof(int32_t), &r_bytes, 1000) == ESP_OK)
+        if (i2s_channel_read(rx_chan, r_buf, MIC_CHUNK_SIZE * sizeof(int32_t), &r_bytes, 500) == ESP_OK)
         {
-            // 1000ms in the above call should be more than enough
+            // 500ms in the above call should be more than enough
             // to receive full chunk. Not receiving it most likely
             // signifies a bug.
             assert(r_bytes == (MIC_CHUNK_SIZE * sizeof(int32_t)));
+            if (xSemaphoreTake(mic_task_ctx->sync_sema, 0) == pdFALSE)
+            {
+                ESP_LOGW(TAG, "Real-time constraint between the mic task and main task violated.");
+            }
 
             memmove(input, &input[MIC_CHUNK_SIZE], MIC_OFFSET * sizeof(float));
 
@@ -276,7 +286,7 @@ static void mic_stream_task(void *args)
             fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
 
             float *item = input;
-            BaseType_t res = xQueueSend(mic_q, &item, 0);
+            BaseType_t res = xQueueSend(mic_task_ctx->mic_q, &item, 0);
             assert(res == pdPASS);
         }
         else
@@ -329,14 +339,20 @@ void app_main(void)
     clear_disp();
     draw_bmp((const uint32_t *)mic_bmp, false);
 
-    QueueHandle_t mic_q = xQueueCreate(1, sizeof(float *));
-    assert(mic_q);
-    xTaskCreatePinnedToCore(mic_stream_task, "mic_stream_task", 2 * 4096, mic_q,
+    mic_task_ctx_t mic_task_ctx;
+
+    mic_task_ctx.mic_q = xQueueCreate(1, sizeof(float *));
+    assert(mic_task_ctx.mic_q);
+    mic_task_ctx.sync_sema = xSemaphoreCreateBinary();
+    assert(mic_task_ctx.sync_sema);
+
+    xTaskCreatePinnedToCore(mic_stream_task, "mic_stream_task", 2 * 4096, &mic_task_ctx,
                             ESP_TASK_MAIN_PRIO + 1, NULL, CONFIG_FREERTOS_NUMBER_OF_CORES - 1);
 
     while (true)
     {
-        if (xQueueReceive(mic_q, &data, portMAX_DELAY) == pdPASS)
+        xSemaphoreGive(mic_task_ctx.sync_sema);
+        if (xQueueReceive(mic_task_ctx.mic_q, &data, portMAX_DELAY) == pdPASS)
         {
             ESP_LOGD(TAG, "Received mic data");
             ts = esp_timer_get_time();
