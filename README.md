@@ -8,3 +8,20 @@ A bigger, LSTM-based model with ~550ms inference time can be found [here](https:
 It is slightly more accurate, especially to the `up` label.
 
 https://github.com/user-attachments/assets/861b4d5a-1f38-4653-9b4f-e0f713c1e0ba
+
+
+## Notes
+
+Number of TinyML model conversion frameworks were tested,
+but none gave satisfactory results. The main problem seems
+to be that the graphs exported from PyTorch (or other
+training-oriented NN frameworks) contain much additional
+information needed only for training, but information
+which obscures the essential structure needed only for inference.
+Here is for example a ONNX graph exported directly from PyTorch:
+
+![graph](images/pytorch_graph.png)
+
+and [this](https://github.com/mryndzionek/esp32s3_eye_kws_demo/blob/main/main/fast_rnn.c) is
+all the "manually-transpiled" code needed for inference (~150 LoCs of C) ...
+
