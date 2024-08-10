@@ -1178,30 +1178,30 @@ typedef struct
     } radix2;
 } fft_plan_t;
 
-static void preemphasis(float input[SAMPLE_LEN])
+static void preemphasis(float *input, size_t len)
 {
     float output_prev = input[0];
 
-    for (size_t i = 1; i < SAMPLE_LEN; i++)
+    for (size_t i = 1; i < len; i++)
     {
         float out = input[i] - PREEMP_COEFF * input[i - 1];
         input[i - 1] = output_prev;
         output_prev = out;
     }
-    input[SAMPLE_LEN - 1] = output_prev;
+    input[len - 1] = output_prev;
 }
 
-static void dcblock(float input[SAMPLE_LEN])
+static void dcblock(float *input, size_t len)
 {
     float output_prev = input[0];
 
-    for (size_t i = 1; i < SAMPLE_LEN; i++)
+    for (size_t i = 1; i < len; i++)
     {
         float out = input[i] - input[i - 1] + 0.95 * output_prev;
         input[i - 1] = output_prev;
         output_prev = out;
     }
-    input[SAMPLE_LEN - 1] = output_prev;
+    input[len - 1] = output_prev;
 }
 
 static unsigned int msb_index(unsigned int _x)
@@ -1351,12 +1351,15 @@ void fbank_norm(float inputoutput[NUM_FILT])
     }
 }
 
-void fbank(float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
+void fbank_prep(float *input, size_t len)
+{
+    dcblock(input, len);
+    preemphasis(input, len);
+}
+
+void fbank(const float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
 {
     size_t frame_num = 0;
-
-    dcblock(input);
-    preemphasis(input);
 
     for (size_t i = 0; i < SAMPLE_LEN; i += FRAME_STEP)
     {

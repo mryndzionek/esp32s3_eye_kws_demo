@@ -25,6 +25,7 @@
 #include "esp_lcd_panel_ops.h"
 
 #include "fbank.h"
+#include "fast_rnn.h"
 #include "bmp.h"
 
 #define MIC_STD_BCLK_IO1 (GPIO_NUM_41)
@@ -46,8 +47,10 @@
 
 #define BOARD_LCD_PIXEL_CLOCK_HZ (60 * 1000 * 1000)
 
-#define MIC_CHUNK_SIZE ((SAMPLE_LEN / 2) + (SAMPLE_LEN / 8))
+#define MIC_CHUNK_SIZE (SAMPLE_LEN / 4)
 #define MIC_OFFSET (SAMPLE_LEN - MIC_CHUNK_SIZE)
+
+#define DETECTION_THRESHOLD (4.0f)
 
 static const char *TAG = "esp32s3_eye_kws_demo";
 
@@ -74,7 +77,7 @@ static const uint16_t palette[256] = {
 
 static i2s_chan_handle_t rx_chan;
 static int32_t r_buf[MIC_CHUNK_SIZE];
-static float input[2][SAMPLE_LEN];
+static float input[SAMPLE_LEN];
 static float features[NUM_FRAMES][NUM_FILT];
 
 static esp_lcd_panel_handle_t panel_handle;
@@ -247,7 +250,6 @@ static void init_lcd(void)
 
 static void mic_stream_task(void *args)
 {
-    size_t idx = 0;
     size_t r_bytes = 0;
     QueueHandle_t mic_q = args;
 
@@ -265,19 +267,17 @@ static void mic_stream_task(void *args)
             // signifies a bug.
             assert(r_bytes == (MIC_CHUNK_SIZE * sizeof(int32_t)));
 
+            memmove(input, &input[MIC_CHUNK_SIZE], MIC_OFFSET * sizeof(float));
+
             for (size_t i = 0; i < MIC_CHUNK_SIZE; i++)
             {
-                input[idx][MIC_OFFSET + i] = (float)(r_buf[i] >> 14);
+                input[MIC_OFFSET + i] = (float)(r_buf[i] >> 13);
             }
-            // copy the same data to the next buffer to create overlap
-            for (size_t i = 0; i < MIC_OFFSET; i++)
-            {
-                input[idx ^ 1][i] = (float)(r_buf[MIC_CHUNK_SIZE - MIC_OFFSET + i] >> 14);
-            }
-            float *item = input[idx];
+            fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
+
+            float *item = input;
             BaseType_t res = xQueueSend(mic_q, &item, 0);
             assert(res == pdPASS);
-            idx ^= 1;
         }
         else
         {
@@ -340,8 +340,15 @@ void app_main(void)
         {
             ESP_LOGD(TAG, "Received mic data");
             ts = esp_timer_get_time();
+
             fbank(data, features);
-            fbank_speech_detect(features, &label, &logit);
+            for (size_t i = 0; i < NUM_FRAMES; i++)
+            {
+                fbank_norm(features[i]);
+            }
+
+            nn_process(features, &logit, &label);
+
             ts = esp_timer_get_time() - ts;
             ESP_LOGD(TAG, "Infer took %lld ms", ts / 1000);
             if (debounce_active)
@@ -353,7 +360,7 @@ void app_main(void)
             }
             else
             {
-                if (label > 0)
+                if ((label > 0) && (logit >= DETECTION_THRESHOLD))
                 {
                     ESP_LOGI(TAG, "label: '%s', label_idx: %u, logit: %f, inf_time: %lldms",
                              fbank_label_idx_to_str(label), label, logit, ts / 1000);
@@ -386,7 +393,7 @@ void app_main(void)
                 }
                 else
                 {
-                    if (count % 2 == 0)
+                    if (count % 4 < 2)
                     {
                         draw_bmp((const uint32_t *)mic_bmp, false);
                     }
