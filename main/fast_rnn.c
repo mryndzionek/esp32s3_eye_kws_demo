@@ -23,7 +23,7 @@ static void fast_rnn0_process(const float input[9][32], const float hidden[9][64
         {
             for (size_t j = 0; j < 64; j++)
             {
-                output[t][j] += RNN0_W[i][j] * input[t][i];
+                output[t][j] += RNN0_W[j][i] * input[t][i];
             }
         }
 
@@ -31,7 +31,7 @@ static void fast_rnn0_process(const float input[9][32], const float hidden[9][64
         {
             for (size_t j = 0; j < 64; j++)
             {
-                output[t][j] += RNN0_U[i][j] * hidden[t][i];
+                output[t][j] += RNN0_U[j][i] * hidden[t][i];
             }
         }
 
@@ -71,19 +71,22 @@ void fast_rnn1_process(const float input[9][64], float output[9][32])
 {
     for (size_t t = 0; t < 9; t++)
     {
-        for (size_t i = 0; i < 64; i++)
+        for (size_t j = 0; j < 32; j++)
         {
-            for (size_t j = 0; j < 32; j++)
+            for (size_t i = 0; i < 64; i++)
             {
-                output[t][j] += RNN1_W[i][j] * input[t][i];
+                output[t][j] += RNN1_W[j][i] * input[t][i];
             }
         }
 
-        for (size_t i = 0; i < 32; i++)
+        if (t > 0)
         {
-            for (size_t j = 0; j < 32; j++)
+            for (size_t i = 0; i < 32; i++)
             {
-                output[t][j] += RNN1_U[i][j] * (t > 0 ? output[t - 1][i] : 0.0f);
+                for (size_t j = 0; j < 32; j++)
+                {
+                    output[t][j] += RNN1_U[j][i] * output[t - 1][i];
+                }
             }
         }
 
@@ -103,19 +106,12 @@ void fc_process(const float input[9][32], float output[9][6])
 
     for (size_t t = 0; t < 9; t++)
     {
-        for (size_t i = 0; i < 32; i++)
+        for (size_t j = 0; j < 6; j++)
         {
-            for (size_t j = 0; j < 6; j++)
+            for (size_t i = 0; i < 32; i++)
             {
                 output[t][j] += input[t][i] * FC_W[j][i];
             }
-        }
-    }
-
-    for (size_t t = 0; t < 9; t++)
-    {
-        for (size_t j = 0; j < 6; j++)
-        {
             output[t][j] += FC_B[j];
         }
     }
