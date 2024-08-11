@@ -1387,10 +1387,13 @@ void fbank(const float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
         for (size_t j = 0; j < NUM_FILT; j++)
         {
             output[frame_idx][j] = 0.0f;
-            for (size_t k = 0; k < NUM_FFT_BINS; k++)
+            for (size_t k = 0; k < NUM_FFT_BINS - 1; k += 4)
             {
-                output[frame_idx][j] += power[k] * FILTERBANK_MAT[j][k];
+                output[frame_idx][j] += power[k + 1] * FILTERBANK_MAT[j][k + 1];
+                output[frame_idx][j] += power[k + 2] * FILTERBANK_MAT[j][k + 2];
+                output[frame_idx][j] += power[k + 3] * FILTERBANK_MAT[j][k + 3];
             }
+            output[frame_idx][j] += power[NUM_FFT_BINS - 1] * FILTERBANK_MAT[j][NUM_FFT_BINS - 1];
 
             if (output[frame_idx][j] < F_EPS)
             {
