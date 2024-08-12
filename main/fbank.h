@@ -1,7 +1,7 @@
 #ifndef __FBANK_H__
 #define __FBANK_H__
 
-#define SAMPLE_LEN (16000UL)
+#define SAMPLE_LEN (16080UL)
 #define NUM_FRAMES (99UL)
 #define NUM_FILT (32UL)
 

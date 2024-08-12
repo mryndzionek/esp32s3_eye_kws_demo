@@ -1349,16 +1349,16 @@ void fbank(const float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
         float power[NUM_FFT_BINS];
         const float *frame_start = &input[i];
 
-        size_t fr = FRAME_LEN;
-        if ((i + FRAME_LEN) >= SAMPLE_LEN)
-        {
-            fr = SAMPLE_LEN - i;
-        }
+        assert((i + FRAME_LEN) <= SAMPLE_LEN);
 
-        for (size_t j = 0; j < fr; j++)
+        for (size_t j = 0; j < FRAME_LEN; j+=4)
         {
             frame[j] = frame_start[j] * FFT_WINDOW[j];
+            frame[j + 1] = frame_start[j + 1] * FFT_WINDOW[j + 1];
+            frame[j + 2] = frame_start[j + 2] * FFT_WINDOW[j + 2];
+            frame[j + 3] = frame_start[j + 3] * FFT_WINDOW[j + 3];
         }
+
         powspec(frame, power);
         size_t frame_idx = frame_num;
         for (size_t j = 0; j < NUM_FILT; j++)
