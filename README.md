@@ -1,20 +1,22 @@
 # esp32s3_eye_kws_demo
 
 Speech recognition is based on [this](https://github.com/microsoft/EdgeML/blob/master/docs/publications/Sha-RNN.pdf)
-architecture and examples from the same repository. The cell type in this model is [FastRNN](https://github.com/microsoft/EdgeML/blob/master/docs/publications/FastGRNN.pdf).
-The inference with this model takes around 120ms.
+architecture and examples from the same repository. The cell type in this model is [FastGRNN](https://github.com/microsoft/EdgeML/blob/master/docs/publications/FastGRNN.pdf).
+The inference with this model takes around 150ms.
 More detailed breakdown:
 
 | Operation                 | Time [ms] |
 |---------------------------|-----------|
-| Preemphasis + DC blocking | <1ms |
+| Preemphasis + DC blocking | 5ms |
 | Mel filterbank | 20ms |
-| Power spectrum (mainly FFT) | 70ms |
-| NN inference | 30ms |
-| **Total** | **~121ms** |
+| Power spectrum (mainly FFT) | 67ms |
+| NN inference | 62ms |
+| **Total** | **~154ms** |
 
 The inference is run every 250ms, so four times a second.
-FFT is the bottleneck now!
+FFT is computationally comparable to NN inference.
+
+FastRNN cell is also supported (can be changed via `menuconfig`).
 
 A bigger, LSTM-based model with ~550ms inference time can be found [here](https://github.com/mryndzionek/esp32s3_eye_kws_demo/tree/lstm_model).
 It is slightly more accurate, especially to the `up` label.
@@ -34,6 +36,6 @@ Here is for example a ONNX graph exported directly from PyTorch:
 
 ![graph](images/pytorch_graph.png)
 
-and [this](https://github.com/mryndzionek/esp32s3_eye_kws_demo/blob/main/main/fast_rnn.c) is
-all the "manually-transpiled" code needed for inference (~160 LoCs of C) ...
+and [this](https://github.com/mryndzionek/esp32s3_eye_kws_demo/blob/main/main/fast_grnn.c) is
+all the "manually-transpiled" code needed for inference (~170 LoCs of C) ...
 

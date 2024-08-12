@@ -25,7 +25,14 @@
 #include "esp_lcd_panel_ops.h"
 
 #include "fbank.h"
+#if defined CONFIG_RNN_CELL_FASTGRNN
+#include "fast_grnn.h"
+#elif defined CONFIG_RNN_CELL_FASTRNN
 #include "fast_rnn.h"
+#else
+#error "RNN cell type not defined"
+#endif
+
 #include "bmp.h"
 
 #define MIC_STD_BCLK_IO1 (GPIO_NUM_41)
@@ -382,7 +389,7 @@ void app_main(void)
                              fbank_label_idx_to_str(label), label, logit, ts / 1000);
                     if (logit >= DETECTION_THRESHOLD)
                     {
-                        ESP_LOGI(TAG,"Detection above threshold");
+                        ESP_LOGI(TAG, "Detection above threshold");
                         debounce_count = 3;
                         switch (label)
                         {

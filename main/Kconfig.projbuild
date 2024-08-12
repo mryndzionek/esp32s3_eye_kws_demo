@@ -1,0 +1,13 @@
+menu "KWS application configuration"
+    choice RNN_CELL_TYPE
+        prompt "Choose RNN cell type"
+        default RNN_CELL_FASTGRNN
+        help
+            Select the RNN cell type
+        config RNN_CELL_FASTGRNN
+            bool "FastGRNN"
+
+        config RNN_CELL_FASTRNN
+            bool "FastRNN"
+    endchoice
+endmenu
