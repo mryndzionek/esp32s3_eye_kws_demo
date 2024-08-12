@@ -1,7 +1,7 @@
 if(CONFIG_RNN_CELL_FASTGRNN)
     set(FAST_RNN_C_FILE "fast_grnn.c")
 elseif(CONFIG_RNN_CELL_FASTRNN)
-    set(FAST_RNN_C_FILE "fast_renn.c")
+    set(FAST_RNN_C_FILE "fast_rnn.c")
 else()
     message(FATAL "RNN cell type not set!")
 endif()

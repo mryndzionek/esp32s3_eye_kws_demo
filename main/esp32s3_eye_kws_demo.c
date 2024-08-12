@@ -25,13 +25,7 @@
 #include "esp_lcd_panel_ops.h"
 
 #include "fbank.h"
-#if defined CONFIG_RNN_CELL_FASTGRNN
-#include "fast_grnn.h"
-#elif defined CONFIG_RNN_CELL_FASTRNN
-#include "fast_rnn.h"
-#else
-#error "RNN cell type not defined"
-#endif
+#include "sha_rnn_intf.h"
 
 #include "bmp.h"
 
@@ -369,8 +363,8 @@ void app_main(void)
             fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
             fbank(input, features);
 
-            nn_norm(features);
-            nn_process(features, &logit, &label);
+            sha_rnn_norm(features);
+            sha_rnn_process(features, &logit, &label);
 
             ts = esp_timer_get_time() - ts;
             ESP_LOGD(TAG, "Infer took %lld ms", ts / 1000);

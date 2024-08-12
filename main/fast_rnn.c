@@ -1,4 +1,4 @@
-#include "fast_rnn.h"
+#include "sha_rnn_intf.h"
 
 #include <stdio.h>
 #include <math.h>
@@ -33,7 +33,7 @@ static inline float sigmoidf(float n)
     return (1 / (1 + powf(EULER_NUMBER_F, -n)));
 }
 
-static void fast_rnn0_process(const float input[9][32], const float hidden[9][64], float output[9][64])
+static void rnn0_process(const float input[9][32], const float hidden[9][64], float output[9][64])
 {
     for (size_t t = 0; t < 9; t++)
     {
@@ -69,16 +69,16 @@ static void fast_rnn0_process(const float input[9][32], const float hidden[9][64
     }
 }
 
-void rnn0_process(const float input[99][32], float output[9][64])
+void sha_rnn_rnn0_process(const sha_rnn_input_t input, sha_rnn_rnn1_input_t output)
 {
     float frame[9][32] = {{0.0f}};
     float hidden[9][64] = {{0.0f}};
 
-    for (size_t k = 0; k < BRICK_SIZE; k++)
+    for (size_t k = 0; k < SHARNN_BRICK_SIZE; k++)
     {
         for (size_t i = 0; i < 9; i++)
         {
-            const float *src = input[k + (i * BRICK_SIZE)];
+            const float *src = input[k + (i * SHARNN_BRICK_SIZE)];
             for (size_t j = 0; j < 32; j++)
             {
                 frame[i][j] = src[j];
@@ -86,12 +86,12 @@ void rnn0_process(const float input[99][32], float output[9][64])
         }
 
         memset(output, 0, sizeof(float) * 9 * 64);
-        fast_rnn0_process(frame, hidden, output);
+        rnn0_process(frame, hidden, output);
         memcpy(hidden, output, sizeof(float) * 9 * 64);
     }
 }
 
-void fast_rnn1_process(const float input[9][64], float output[9][32])
+void sha_rnn_rnn1_process(const sha_rnn_rnn1_input_t input, sha_rnn_fc_input_t output)
 {
     for (size_t t = 0; t < 9; t++)
     {
@@ -130,7 +130,7 @@ void fast_rnn1_process(const float input[9][64], float output[9][32])
     }
 }
 
-void fc_process(const float input[9][32], float output[9][6])
+void sha_rnn_fc_process(const sha_rnn_fc_input_t input, sha_rnn_output_t output)
 {
     memset(output, 0, 9 * 6 * sizeof(float));
 
@@ -150,7 +150,7 @@ void fc_process(const float input[9][32], float output[9][6])
     }
 }
 
-void get_max_logit(const float input[9][6], float *max_logit, size_t *max_idx)
+void sha_rnn_get_max_logit(const sha_rnn_output_t input, float *max_logit, size_t *max_idx)
 {
     *max_logit = input[0][0];
     *max_idx = 0;
@@ -168,19 +168,19 @@ void get_max_logit(const float input[9][6], float *max_logit, size_t *max_idx)
     }
 }
 
-void nn_process(const float input[99][32], float *max_logit, size_t *max_idx)
+void sha_rnn_process(const sha_rnn_input_t input, float *max_logit, size_t *max_idx)
 {
     float output[9][64] = {{0.0f}};
     float output2[9][32] = {{0.0f}};
     float output3[9][6] = {{0.0f}};
 
-    rnn0_process(input, output);
-    fast_rnn1_process(output, output2);
-    fc_process(output2, output3);
-    get_max_logit(output3, max_logit, max_idx);
+    sha_rnn_rnn0_process(input, output);
+    sha_rnn_rnn1_process(output, output2);
+    sha_rnn_fc_process(output2, output3);
+    sha_rnn_get_max_logit(output3, max_logit, max_idx);
 }
 
-void nn_norm(float input[99][32])
+void sha_rnn_norm(sha_rnn_input_t input)
 {
     for (size_t i = 0; i < 99; i++)
     {
