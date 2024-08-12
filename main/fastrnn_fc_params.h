@@ -1,5 +1,5 @@
-#ifndef __FC_PARAMS__
-#define __FC_PARAMS__
+#ifndef __FASTRNN_FC_PARAMS__
+#define __FASTRNN_FC_PARAMS__
 
 #define FC_IN_DIM (32)
 #define FC_OUT_DIM (6)
@@ -39,5 +39,5 @@ const float FC_B[6] =
 // clang-format on
 
 
-#endif // __FC_PARAMS__
+#endif // __FASTRNN_FC_PARAMS__
 

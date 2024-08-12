@@ -1,5 +1,5 @@
-#ifndef __RNN0_PARAMS__
-#define __RNN0_PARAMS__
+#ifndef __FASTRNN_RNN0_PARAMS__
+#define __FASTRNN_RNN0_PARAMS__
 
 #define RNN0_HIDD_DIM0 (32)
 #define RNN0_HIDD_DIM1 (64)
@@ -796,5 +796,5 @@ const float RNN0_U[64][64] = {
 // clang-format on
 
 
-#endif // __RNN0_PARAMS__
+#endif // __FASTRNN_RNN0_PARAMS__
 

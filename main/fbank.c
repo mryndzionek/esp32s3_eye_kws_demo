@@ -12,7 +12,6 @@
 #include <assert.h>
 
 #include "fbank.h"
-#include "speech_nn.h"
 
 #define PREEMP_COEFF (0.97f)
 
@@ -1138,20 +1137,6 @@ const float FFT_WINDOW[FRAME_LEN] = {
     8.279189e-02, 8.205173e-02, 8.142514e-02, 8.091226e-02, 8.051322e-02, 8.022812e-02, 8.005703e-02, 8.000000e-02
 };
 
-const float INPUT_MEANS[32] = {
-    2.232799e+00, 4.384834e+00, 5.667434e+00, 5.924844e+00, 6.031419e+00, 6.208214e+00, 6.309102e+00, 6.734194e+00,
-    6.645551e+00, 6.595541e+00, 6.710339e+00, 6.766218e+00, 6.672122e+00, 6.789988e+00, 6.959985e+00, 6.980392e+00,
-    7.108364e+00, 7.126550e+00, 7.138697e+00, 7.348612e+00, 7.369184e+00, 7.408870e+00, 7.545332e+00, 7.545481e+00,
-    7.499767e+00, 7.432167e+00, 7.360705e+00, 7.322320e+00, 7.277747e+00, 7.233547e+00, 6.996801e+00, 5.944562e+00,
-};
-
-const float INPUT_STDEVS[32] = {
-    5.864312e+00, 6.216245e+00, 6.492652e+00, 6.558906e+00, 6.609576e+00, 6.761107e+00, 6.827245e+00, 6.852625e+00,
-    6.758900e+00, 6.610428e+00, 6.502977e+00, 6.422057e+00, 6.346368e+00, 6.293631e+00, 6.280047e+00, 6.250429e+00,
-    6.207995e+00, 6.169191e+00, 6.188506e+00, 6.241447e+00, 6.210210e+00, 6.181214e+00, 6.202075e+00, 6.171277e+00,
-    6.092442e+00, 6.025346e+00, 5.973167e+00, 5.932464e+00, 5.900748e+00, 5.881588e+00, 5.832450e+00, 5.644658e+00,
-};
-
 // clang-format on
 
 static const char *labels_lut[NUM_LABELS + 1] = {
@@ -1343,14 +1328,6 @@ static void powspec(const float input[FRAME_LEN], float output[NUM_FFT_BINS])
     }
 }
 
-void fbank_norm(float inputoutput[NUM_FILT])
-{
-    for (size_t i = 0; i < NUM_FILT; i++)
-    {
-        inputoutput[i] = (inputoutput[i] - INPUT_MEANS[i]) / INPUT_STDEVS[i];
-    }
-}
-
 void fbank_prep(float *input, size_t len)
 {
     dcblock(input, len);
@@ -1403,65 +1380,6 @@ void fbank(const float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
         }
         frame_num++;
     }
-}
-
-static const float LSTM1[1][9][64] = {{{0.0f}}};
-static const float LSTM2[1][9][64] = {{{0.0f}}};
-static const float LSTM3[1][1][32] = {{{0.0f}}};
-static const float LSTM4[1][1][32] = {{{0.0f}}};
-
-void fbank_speech_detect(float input[NUM_FRAMES][NUM_FILT], size_t *label, float *logit)
-{
-    float logits[9][NUM_LABELS];
-    size_t max_idx = 0;
-    float max_log;
-
-    for (size_t i = 0; i < NUM_FRAMES; i++)
-    {
-        fbank_norm(input[i]);
-    }
-
-    entry(input, LSTM1, LSTM2, LSTM3, LSTM4, logits);
-    max_log = logits[0][0];
-
-    for (size_t i = 0; i < 9; i++)
-    {
-        for (size_t j = 0; j < NUM_LABELS; j++)
-        {
-            if (logits[i][j] > max_log)
-            {
-                max_log = logits[i][j];
-                max_idx = j;
-            }
-        }
-    }
-
-    *label = max_idx;
-    *logit = max_log;
-}
-
-void fbank_print_min_max(float input[NUM_FRAMES][NUM_FILT])
-{
-    float min_v = 100.0;
-    float max_v = -100.0;
-
-    for (size_t i = 0; i < NUM_FRAMES; i++)
-    {
-        for (size_t j = 0; j < NUM_FILT; j++)
-        {
-            if (input[i][j] < min_v)
-            {
-                min_v = input[i][j];
-            }
-
-            if (input[i][j] > max_v)
-            {
-                max_v = input[i][j];
-            }
-        }
-    }
-
-    printf("Min: %f;  Max: %f\n", min_v, max_v);
 }
 
 char const *fbank_label_idx_to_str(size_t label)

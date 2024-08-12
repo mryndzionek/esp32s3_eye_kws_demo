@@ -361,11 +361,8 @@ void app_main(void)
 
             fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
             fbank(input, features);
-            for (size_t i = 0; i < NUM_FRAMES; i++)
-            {
-                fbank_norm(features[i]);
-            }
 
+            nn_norm(features);
             nn_process(features, &logit, &label);
 
             ts = esp_timer_get_time() - ts;

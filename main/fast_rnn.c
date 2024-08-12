@@ -4,11 +4,29 @@
 #include <math.h>
 #include <string.h>
 
-#include "rnn0_params.h"
-#include "rnn1_params.h"
-#include "fc_params.h"
+#include "fastrnn_rnn0_params.h"
+#include "fastrnn_rnn1_params.h"
+#include "fastrnn_fc_params.h"
 
 #define EULER_NUMBER_F (2.71828182846f)
+
+// clang-format off
+
+static const float INPUT_MEANS[32] = {
+    2.232799e+00, 4.384834e+00, 5.667434e+00, 5.924844e+00, 6.031419e+00, 6.208214e+00, 6.309102e+00, 6.734194e+00,
+    6.645551e+00, 6.595541e+00, 6.710339e+00, 6.766218e+00, 6.672122e+00, 6.789988e+00, 6.959985e+00, 6.980392e+00,
+    7.108364e+00, 7.126550e+00, 7.138697e+00, 7.348612e+00, 7.369184e+00, 7.408870e+00, 7.545332e+00, 7.545481e+00,
+    7.499767e+00, 7.432167e+00, 7.360705e+00, 7.322320e+00, 7.277747e+00, 7.233547e+00, 6.996801e+00, 5.944562e+00,
+};
+
+static const float INPUT_STDEVS[32] = {
+    5.864312e+00, 6.216245e+00, 6.492652e+00, 6.558906e+00, 6.609576e+00, 6.761107e+00, 6.827245e+00, 6.852625e+00,
+    6.758900e+00, 6.610428e+00, 6.502977e+00, 6.422057e+00, 6.346368e+00, 6.293631e+00, 6.280047e+00, 6.250429e+00,
+    6.207995e+00, 6.169191e+00, 6.188506e+00, 6.241447e+00, 6.210210e+00, 6.181214e+00, 6.202075e+00, 6.171277e+00,
+    6.092442e+00, 6.025346e+00, 5.973167e+00, 5.932464e+00, 5.900748e+00, 5.881588e+00, 5.832450e+00, 5.644658e+00,
+};
+
+// clang-format on
 
 static inline float sigmoidf(float n)
 {
@@ -160,4 +178,15 @@ void nn_process(const float input[99][32], float *max_logit, size_t *max_idx)
     fast_rnn1_process(output, output2);
     fc_process(output2, output3);
     get_max_logit(output3, max_logit, max_idx);
+}
+
+void nn_norm(float input[99][32])
+{
+    for (size_t i = 0; i < 99; i++)
+    {
+        for (size_t j = 0; j < 32; j++)
+        {
+            input[i][j] = (input[i][j] - INPUT_MEANS[j]) / INPUT_STDEVS[j];
+        }
+    }
 }
