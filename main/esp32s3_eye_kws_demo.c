@@ -51,7 +51,7 @@
 #define MIC_CHUNK_SIZE (SAMPLE_LEN / 4)
 #define MIC_OFFSET (SAMPLE_LEN - MIC_CHUNK_SIZE)
 
-#define DETECTION_THRESHOLD (3.5f)
+#define DETECTION_THRESHOLD (3.0f)
 
 typedef struct
 {
@@ -138,7 +138,7 @@ static void draw_features(float features[NUM_FRAMES][NUM_FILT])
     {
         for (size_t j = 0; j < BOARD_LCD_H_RES; j++)
         {
-            int32_t idx = ((features[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i] + 0.3) * 255) / 2.0;
+            int32_t idx = ((features[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i] + 0.3) * 255) / 3.5;
             if (idx < 0)
             {
                 idx = 0;
@@ -357,7 +357,8 @@ void app_main(void)
 
             for (size_t i = 0; i < MIC_CHUNK_SIZE; i++)
             {
-                input[MIC_OFFSET + i] = (float)(data[i] >> 14);
+                input[MIC_OFFSET + i] = (float)(data[i]);
+                input[MIC_OFFSET + i] /= (1UL << 27);
             }
 
             fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
