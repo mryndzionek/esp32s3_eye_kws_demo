@@ -132,8 +132,24 @@ static void draw_bmp(const uint32_t *bmp, bool full)
     }
 }
 
-static void draw_features(float features[NUM_FRAMES][NUM_FILT])
+static void draw_features(float features[NUM_FRAMES][NUM_FILT], float rssi)
 {
+    const uint16_t rssi_clrs[] = {57351, 57599, 60155, 248};
+    const float rssi_clamp_v = 50.0f; 
+
+    rssi += 60.0;
+    if (rssi < 0)
+    {
+        rssi = 0;
+    }
+
+    if (rssi > rssi_clamp_v)
+    {
+        rssi = rssi_clamp_v;
+    }
+
+    size_t rssi_lev = rssi;
+
     for (size_t i = 0; i < NUM_FILT; i++)
     {
         for (size_t j = 0; j < BOARD_LCD_H_RES; j++)
@@ -149,8 +165,26 @@ static void draw_features(float features[NUM_FRAMES][NUM_FILT])
             }
             line_buf[j] = palette[idx];
         }
-        esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - 2 * i, BOARD_LCD_H_RES, BOARD_LCD_V_RES - (2 * i) + 1, line_buf);
-        esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - (2 * i) + 1, BOARD_LCD_H_RES, BOARD_LCD_V_RES - (2 * i) + 2, line_buf);
+        esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - 2 * i, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - (2 * i) + 1, line_buf);
+        esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - (2 * i) + 1, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - (2 * i) + 2, line_buf);
+    }
+
+    // Simple RSSI bargraph
+    for (size_t i = 0; i < rssi_clamp_v; i++)
+    {
+        if (i < rssi_lev)
+        {
+            line_buf[0] = rssi_clrs[i / (int)((rssi_clamp_v / 4) + 1)];
+            line_buf[1] = rssi_clrs[i / (int)((rssi_clamp_v / 4) + 1)];
+        }
+        else
+        {
+            line_buf[0] = 0x0000;
+            line_buf[1] = 0x0000;
+        }
+
+        esp_lcd_panel_draw_bitmap(panel_handle, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - 2 * i, BOARD_LCD_H_RES, BOARD_LCD_V_RES - 2 * i + 1, line_buf);
+        esp_lcd_panel_draw_bitmap(panel_handle, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - 2 * i + 1, BOARD_LCD_H_RES, BOARD_LCD_V_RES - 2 * i + 2, line_buf);
     }
 }
 
@@ -362,6 +396,7 @@ void app_main(void)
             }
 
             fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
+            float rssi = fbank_get_rssi();
             fbank(input, features);
 
             sha_rnn_norm(features);
@@ -425,7 +460,7 @@ void app_main(void)
                     }
                 }
             }
-            draw_features(features);
+            draw_features(features, rssi);
             count++;
         }
         else

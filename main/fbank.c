@@ -299,6 +299,28 @@ static void dcblock(float *input, size_t len)
     input[len - 1] = output_prev;
 }
 
+static float agc_g = 1.0f;
+
+static void agc(float *input, size_t len)
+{
+  float y;
+  float y2;
+  static float y2_prime = 1.0;
+  static const float alpha = 0.001;
+
+  for (size_t i = 0; i < len; i++)
+  {
+    y = agc_g * input[i];
+    y2 = y * y;
+    y2_prime = (1.0 - alpha) * y2_prime + alpha * y2;
+    if (y2_prime > 1e-6f)
+      agc_g *= expf(-0.5f * alpha * logf(y2_prime));
+
+    // clamp to 120 dB gain
+    agc_g = (agc_g > 1e6f) ? 1e6f : agc_g;
+  }
+}
+
 static unsigned int msb_index(unsigned int _x)
 {
     unsigned int bits;
@@ -441,7 +463,13 @@ static void powspec(const float input[FRAME_LEN], float output[NUM_FFT_BINS])
 void fbank_prep(float *input, size_t len)
 {
     dcblock(input, len);
+    agc(input, len);
     preemphasis(input, len);
+}
+
+float fbank_get_rssi(void)
+{
+  return -20 * log10f(agc_g);
 }
 
 void fbank(const float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
