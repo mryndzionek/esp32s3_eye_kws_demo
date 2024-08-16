@@ -48,8 +48,9 @@
 
 #define BOARD_LCD_PIXEL_CLOCK_HZ (60 * 1000 * 1000)
 
-#define MIC_CHUNK_SIZE (SAMPLE_LEN / 4)
-#define MIC_OFFSET (SAMPLE_LEN - MIC_CHUNK_SIZE)
+#define FRAME_OFFSET (FRAME_LEN - FRAME_STEP)
+#define CHUNK_SIZE ((SHARNN_BRICK_SIZE * FRAME_STEP) + (FRAME_OFFSET))
+#define CHUNK_READ_SIZE (CHUNK_SIZE - FRAME_OFFSET)
 
 #define DETECTION_THRESHOLD (3.0f)
 
@@ -83,9 +84,9 @@ static const uint16_t palette[256] = {
 // clang-format on
 
 static i2s_chan_handle_t rx_chan;
-static int32_t r_buf[2][MIC_CHUNK_SIZE];
-static float input[SAMPLE_LEN];
-static float features[NUM_FRAMES][NUM_FILT];
+static int32_t r_buf[2][CHUNK_SIZE];
+static float input[CHUNK_SIZE];
+static float features[SHARNN_BRICK_SIZE][NUM_FILT];
 
 static esp_lcd_panel_handle_t panel_handle;
 static uint16_t *line_buf;
@@ -132,10 +133,35 @@ static void draw_bmp(const uint32_t *bmp, bool full)
     }
 }
 
-static void draw_features(float features[NUM_FRAMES][NUM_FILT], float rssi)
+static uint16_t val2col(float v)
 {
+    int32_t idx = ((v + 0.3) * 255) / 3.5;
+    if (idx < 0)
+    {
+        idx = 0;
+    }
+    if (idx > 255)
+    {
+        idx = 255;
+    }
+    return palette[idx];
+}
+
+static void draw_features(float features[SHARNN_BRICK_SIZE][NUM_FILT], float rssi)
+{
+    static uint16_t feature_buff[NUM_FRAMES][NUM_FILT];
     const uint16_t rssi_clrs[] = {57351, 57599, 60155, 248};
-    const float rssi_clamp_v = 50.0f; 
+    const float rssi_clamp_v = 50.0f;
+
+    memmove(feature_buff, &feature_buff[SHARNN_BRICK_SIZE], sizeof(uint16_t) * NUM_FILT * (NUM_FRAMES - SHARNN_BRICK_SIZE));
+
+    for (size_t i = 0; i < SHARNN_BRICK_SIZE; i++)
+    {
+        for (size_t j = 0; j < NUM_FILT; j++)
+        {
+            feature_buff[NUM_FRAMES - SHARNN_BRICK_SIZE + i][j] = val2col(features[i][j]);
+        }
+    }
 
     rssi += 60.0;
     if (rssi < 0)
@@ -154,16 +180,7 @@ static void draw_features(float features[NUM_FRAMES][NUM_FILT], float rssi)
     {
         for (size_t j = 0; j < BOARD_LCD_H_RES; j++)
         {
-            int32_t idx = ((features[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i] + 0.3) * 255) / 3.5;
-            if (idx < 0)
-            {
-                idx = 0;
-            }
-            if (idx > 255)
-            {
-                idx = 255;
-            }
-            line_buf[j] = palette[idx];
+            line_buf[j] = feature_buff[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i];
         }
         esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - 2 * i, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - (2 * i) + 1, line_buf);
         esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - (2 * i) + 1, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - (2 * i) + 2, line_buf);
@@ -302,9 +319,9 @@ static void mic_stream_task(void *args)
 
     while (true)
     {
-        if (i2s_channel_read(rx_chan, r_buf[hand], MIC_CHUNK_SIZE * sizeof(int32_t), &r_bytes, 500) == ESP_OK)
+        if (i2s_channel_read(rx_chan, &r_buf[hand][FRAME_OFFSET], CHUNK_READ_SIZE * sizeof(int32_t), &r_bytes, 500) == ESP_OK)
         {
-            assert(r_bytes == (MIC_CHUNK_SIZE * sizeof(int32_t)));
+            assert(r_bytes == (CHUNK_READ_SIZE * sizeof(int32_t)));
 
             // 500ms in the above call should be more than enough
             // to receive full chunk. Not receiving it most likely
@@ -387,20 +404,21 @@ void app_main(void)
             ESP_LOGD(TAG, "Received mic data");
             ts = esp_timer_get_time();
 
-            memmove(input, &input[MIC_CHUNK_SIZE], MIC_OFFSET * sizeof(float));
-
-            for (size_t i = 0; i < MIC_CHUNK_SIZE; i++)
+            for (size_t i = FRAME_OFFSET; i < CHUNK_SIZE; i++)
             {
-                input[MIC_OFFSET + i] = (float)(data[i]);
-                input[MIC_OFFSET + i] /= (1UL << 27);
+                input[i] = (float)(data[i]);
+                input[i] /= (1UL << 24);
+                input[i] *= 0.1;
             }
 
-            fbank_prep(&input[MIC_OFFSET], MIC_CHUNK_SIZE);
+            fbank_prep(input, CHUNK_SIZE);
             float rssi = fbank_get_rssi();
-            fbank(input, features);
+            fbank(input, features, CHUNK_SIZE);
 
             sha_rnn_norm(features);
             sha_rnn_process(features, &logit, &label);
+
+            memmove(input, &input[CHUNK_SIZE - FRAME_OFFSET], FRAME_OFFSET * sizeof(float));
 
             ts = esp_timer_get_time() - ts;
             ESP_LOGD(TAG, "Infer took %lld ms", ts / 1000);
@@ -450,7 +468,7 @@ void app_main(void)
                 }
                 else
                 {
-                    if (count % 4 < 2)
+                    if (count % 8 < 4)
                     {
                         draw_bmp((const uint32_t *)mic_bmp, false);
                     }

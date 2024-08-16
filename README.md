@@ -2,19 +2,7 @@
 
 Speech recognition is based on [this](https://github.com/microsoft/EdgeML/blob/master/docs/publications/Sha-RNN.pdf)
 architecture and examples from the same repository. The cell type in this model is [FastGRNN](https://github.com/microsoft/EdgeML/blob/master/docs/publications/FastGRNN.pdf).
-The inference with this model takes around 150ms.
-More detailed breakdown:
-
-| Operation                 | Time [ms] |
-|---------------------------|-----------|
-| Preemphasis + DC blocking | 5ms |
-| Mel filterbank | 20ms |
-| Power spectrum (mainly FFT) | 67ms |
-| NN inference | 62ms |
-| **Total** | **~154ms** |
-
-The inference is run every 250ms, so four times a second.
-FFT is computationally comparable to NN inference.
+The inference is run nine times a second. The CPU utilization due to inference is only ~24%.
 
 FastRNN cell is also supported (can be changed via `menuconfig`).
 

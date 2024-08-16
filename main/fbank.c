@@ -17,8 +17,7 @@
 
 #define NUM_FFT (512UL)
 #define NUM_FFT_BINS ((NUM_FFT / 2UL) + 1UL)
-#define FRAME_LEN (400UL)
-#define FRAME_STEP (160UL)
+
 #define F_EPS (2.220446049250313e-16f)
 #define FILTERBANK_LEN (40)
 
@@ -472,22 +471,17 @@ float fbank_get_rssi(void)
   return -20 * log10f(agc_g);
 }
 
-void fbank(const float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
+void fbank(float *input, float (*output)[NUM_FILT], size_t size)
 {
     size_t frame_num = 0;
 
-    for (size_t i = 0; i < SAMPLE_LEN; i += FRAME_STEP)
+    for (size_t i = 0; i < size; i += FRAME_STEP)
     {
-        if (frame_num >= NUM_FRAMES)
-        {
-            break;
-        }
+        assert((i + FRAME_LEN) <= size);
 
         float frame[FRAME_LEN] = {0.0};
         float power[NUM_FFT_BINS];
         const float *frame_start = &input[i];
-
-        assert((i + FRAME_LEN) <= SAMPLE_LEN);
 
         for (size_t j = 0; j < FRAME_LEN; j+=4)
         {
@@ -516,6 +510,13 @@ void fbank(const float input[SAMPLE_LEN], float output[NUM_FRAMES][NUM_FILT])
             }
             output[frame_idx][j] = logf(output[frame_idx][j] + 1.0e-10);
         }
+
+        if((i + FRAME_LEN) == size)
+        {
+          assert(frame_num == 10);
+          break;
+        }
+        
         frame_num++;
     }
 }
