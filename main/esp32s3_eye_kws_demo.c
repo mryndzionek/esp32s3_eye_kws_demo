@@ -89,7 +89,7 @@ static float input[CHUNK_SIZE];
 static float features[SHARNN_BRICK_SIZE][NUM_FILT];
 
 static esp_lcd_panel_handle_t panel_handle;
-static uint16_t *line_buf;
+static uint16_t *frame_buf;
 
 static void init_mic(void)
 {
@@ -127,9 +127,8 @@ static void draw_bmp(const uint32_t *bmp, bool full)
         for (size_t x = 0; x < rx; x++)
         {
             bool bit = bmp[(y * ((rx + 32 - 1) / 32)) + (x / 32)] & (1UL << (31 - (x % 32)));
-            line_buf[x] = bit ? 0xFFFF : 0x0000;
+            frame_buf[(y * BOARD_LCD_H_RES) + ox + x] = bit ? 0xFFFF : 0x0000;
         }
-        esp_lcd_panel_draw_bitmap(panel_handle, ox, y, ox + rx, y + 1, line_buf);
     }
 }
 
@@ -180,42 +179,43 @@ static void draw_features(float features[SHARNN_BRICK_SIZE][NUM_FILT], float rss
     {
         for (size_t j = 0; j < BOARD_LCD_H_RES; j++)
         {
-            line_buf[j] = feature_buff[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i];
+            size_t y = BOARD_LCD_V_RES - (2 * i) - 2;
+            uint16_t c = feature_buff[(j * NUM_FRAMES) / BOARD_LCD_H_RES][i];
+            frame_buf[(BOARD_LCD_H_RES * y) + j] = c;
+            frame_buf[(BOARD_LCD_H_RES * (y + 1)) + j] = c;
         }
-        esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - 2 * i, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - (2 * i) + 1, line_buf);
-        esp_lcd_panel_draw_bitmap(panel_handle, 0, BOARD_LCD_V_RES - (2 * i) + 1, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - (2 * i) + 2, line_buf);
     }
 
     // Simple RSSI bargraph
     for (size_t i = 0; i < rssi_clamp_v; i++)
     {
+        size_t y = BOARD_LCD_V_RES - 2 * i - 2;
+        uint16_t c = 0;
         if (i < rssi_lev)
         {
-            line_buf[0] = rssi_clrs[i / (int)((rssi_clamp_v / 4) + 1)];
-            line_buf[1] = rssi_clrs[i / (int)((rssi_clamp_v / 4) + 1)];
+            c = rssi_clrs[i / (int)((rssi_clamp_v / 4) + 1)];
         }
-        else
-        {
-            line_buf[0] = 0x0000;
-            line_buf[1] = 0x0000;
-        }
-
-        esp_lcd_panel_draw_bitmap(panel_handle, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - 2 * i, BOARD_LCD_H_RES, BOARD_LCD_V_RES - 2 * i + 1, line_buf);
-        esp_lcd_panel_draw_bitmap(panel_handle, BOARD_LCD_H_RES - 2, BOARD_LCD_V_RES - 2 * i + 1, BOARD_LCD_H_RES, BOARD_LCD_V_RES - 2 * i + 2, line_buf);
+        frame_buf[y * BOARD_LCD_H_RES + BOARD_LCD_H_RES - 2] = c;
+        frame_buf[y * BOARD_LCD_H_RES + BOARD_LCD_H_RES - 1] = c;
     }
 }
 
 static void clear_disp(void)
 {
-    for (size_t x = 0; x < BOARD_LCD_H_RES; x++)
-    {
-        line_buf[x] = 0x0000;
-    }
-
     for (int y = 0; y < BOARD_LCD_V_RES; y++)
     {
-        esp_lcd_panel_draw_bitmap(panel_handle, 0, y, BOARD_LCD_H_RES, y + 1, line_buf);
+        for (size_t x = 0; x < BOARD_LCD_H_RES; x++)
+        {
+            frame_buf[(y * BOARD_LCD_H_RES) + x] = 0x0000;
+        }
     }
+
+    esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, BOARD_LCD_H_RES, BOARD_LCD_V_RES, frame_buf);
+}
+
+static void flush_disp(void)
+{
+    esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, BOARD_LCD_H_RES, BOARD_LCD_V_RES, frame_buf);
 }
 
 esp_err_t bsp_display_brightness_init(void)
@@ -378,13 +378,15 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Minimum free heap size: %" PRIu32 " bytes", esp_get_minimum_free_heap_size());
 
-    line_buf = (uint16_t *)heap_caps_malloc((BOARD_LCD_H_RES) * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
-    assert(line_buf);
+    frame_buf = (uint16_t *)heap_caps_malloc((BOARD_LCD_H_RES) * (BOARD_LCD_V_RES) * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+    assert(frame_buf);
     init_lcd();
     draw_bmp((const uint32_t *)title_bmp, true);
+    flush_disp();
     vTaskDelay(pdMS_TO_TICKS(5000));
     clear_disp();
     draw_bmp((const uint32_t *)mic_bmp, false);
+    flush_disp();
 
     mic_task_ctx_t mic_task_ctx;
 
@@ -479,6 +481,7 @@ void app_main(void)
                 }
             }
             draw_features(features, rssi);
+            flush_disp();
             count++;
         }
         else
