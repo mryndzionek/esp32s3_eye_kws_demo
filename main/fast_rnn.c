@@ -180,7 +180,7 @@ void sha_rnn_process(const sha_rnn_input_t input, float *max_logit, size_t *max_
 
 void sha_rnn_norm(sha_rnn_input_t input)
 {
-    for (size_t i = 0; i < 99; i++)
+    for (size_t i = 0; i < SHARNN_BRICK_SIZE; i++)
     {
         for (size_t j = 0; j < 32; j++)
         {
