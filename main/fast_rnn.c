@@ -117,11 +117,11 @@ void sha_rnn_rnn1_process(const sha_rnn_rnn1_input_t input, sha_rnn_fc_input_t o
     float rnn1_hidden[32] = {0.0};
 
     memcpy(rnn1_input_hist[rnn1_hist_idx], input, sizeof(sha_rnn_rnn1_input_t));
-    memset(output, 0, sizeof(sha_rnn_fc_input_t));
 
     for (size_t i = 0; i < 9; i++)
     {
         size_t j = (rnn1_hist_idx + 1 + i) % 9;
+        memset(output, 0, sizeof(sha_rnn_fc_input_t));
         rnn1_process(rnn1_input_hist[j], rnn1_hidden, output);
         memcpy(rnn1_hidden, output, sizeof(sha_rnn_fc_input_t));
     }
