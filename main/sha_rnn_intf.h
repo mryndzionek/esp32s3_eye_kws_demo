@@ -21,7 +21,7 @@ void sha_rnn_norm(sha_rnn_input_t input);
 void sha_rnn_rnn0_process(const sha_rnn_input_t input, sha_rnn_rnn1_input_t output);
 void sha_rnn_rnn1_process(const sha_rnn_rnn1_input_t input, sha_rnn_fc_input_t output);
 void sha_rnn_fc_process(const sha_rnn_fc_input_t input, sha_rnn_output_t output);
-void sha_rnn_get_max_logit(const sha_rnn_output_t input, float *max_logit, size_t *max_idx);
-void sha_rnn_process(const sha_rnn_input_t input, float *max_logit, size_t *max_idx);
+void sha_rnn_get_max_prob(const sha_rnn_output_t input, float *max_prob, size_t *max_idx);
+void sha_rnn_process(const sha_rnn_input_t input, float *max_prob, size_t *max_idx);
 
 #endif // __SHA_RNN_INTF__

@@ -31,6 +31,23 @@ static inline float sigmoidf(float n)
     return (1 / (1 + powf(EULER_NUMBER_F, -n)));
 }
 
+static inline float expo(float y)
+{
+    if (y > 80)
+        y = 80;
+    return exp(y);
+}
+
+static float softmax(const float *xs, size_t n, size_t len)
+{
+    float sum = 0;
+    for (size_t i = 0; i < len; i++)
+        sum += expo(xs[i]);
+    if (sum == 0)
+        sum = 0.001;
+    return (expo(xs[n])) / sum;
+}
+
 static void rnn0_process(const float input[32], const float hidden[64], float output[64])
 {
     for (size_t j = 0; j < 64; j++)
@@ -138,9 +155,9 @@ void sha_rnn_fc_process(const sha_rnn_fc_input_t input, sha_rnn_output_t output)
 {
     memset(output, 0, 6 * sizeof(float));
 
-    for (size_t j = 0; j < 6; j++)
+    for (size_t j = 0; j < FC_OUT_DIM; j++)
     {
-        for (size_t i = 0; i < 32; i += 4)
+        for (size_t i = 0; i < FC_IN_DIM; i += 4)
         {
             output[j] += input[i] * FC_W[j][i];
             output[j] += input[i + 1] * FC_W[j][i + 1];
@@ -151,22 +168,24 @@ void sha_rnn_fc_process(const sha_rnn_fc_input_t input, sha_rnn_output_t output)
     }
 }
 
-void sha_rnn_get_max_logit(const sha_rnn_output_t input, float *max_logit, size_t *max_idx)
+void sha_rnn_get_max_prob(const sha_rnn_output_t input, float *max_prob, size_t *max_idx)
 {
-    *max_logit = input[0];
+    float max_logit = input[0];
     *max_idx = 0;
 
-    for (size_t j = 0; j < 6; j++)
+    for (size_t j = 0; j < FC_OUT_DIM; j++)
     {
-        if (input[j] > *max_logit)
+        if (input[j] > max_logit)
         {
-            *max_logit = input[j];
+            max_logit = input[j];
             *max_idx = j;
         }
     }
+
+    *max_prob = softmax(input, *max_idx, FC_OUT_DIM);
 }
 
-void sha_rnn_process(const sha_rnn_input_t input, float *max_logit, size_t *max_idx)
+void sha_rnn_process(const sha_rnn_input_t input, float *max_prob, size_t *max_idx)
 {
     float output[64] = {0.0f};
     float output2[32] = {0.0f};
@@ -175,7 +194,7 @@ void sha_rnn_process(const sha_rnn_input_t input, float *max_logit, size_t *max_
     sha_rnn_rnn0_process(input, output);
     sha_rnn_rnn1_process(output, output2);
     sha_rnn_fc_process(output2, output3);
-    sha_rnn_get_max_logit(output3, max_logit, max_idx);
+    sha_rnn_get_max_prob(output3, max_prob, max_idx);
 }
 
 void sha_rnn_norm(sha_rnn_input_t input)

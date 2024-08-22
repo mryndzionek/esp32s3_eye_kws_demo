@@ -52,7 +52,7 @@
 #define CHUNK_SIZE ((SHARNN_BRICK_SIZE * FRAME_STEP) + (FRAME_OFFSET))
 #define CHUNK_READ_SIZE (CHUNK_SIZE - FRAME_OFFSET)
 
-#define DETECTION_THRESHOLD (3.0f)
+#define DETECTION_THRESHOLD (0.85f)
 
 typedef struct
 {
@@ -346,7 +346,7 @@ static void mic_stream_task(void *args)
 void app_main(void)
 {
     size_t label;
-    float logit;
+    float prob;
     int64_t ts;
     int32_t *data;
     size_t debounce_count = 0;
@@ -418,7 +418,7 @@ void app_main(void)
             fbank(input, features, CHUNK_SIZE);
 
             sha_rnn_norm(features);
-            sha_rnn_process(features, &logit, &label);
+            sha_rnn_process(features, &prob, &label);
 
             memmove(input, &input[CHUNK_SIZE - FRAME_OFFSET], FRAME_OFFSET * sizeof(float));
 
@@ -435,9 +435,9 @@ void app_main(void)
             {
                 if (label > 0)
                 {
-                    ESP_LOGI(TAG, "label: '%s', label_idx: %u, logit: %f, inf_time: %lldms",
-                             fbank_label_idx_to_str(label), label, logit, ts / 1000);
-                    if (logit >= DETECTION_THRESHOLD)
+                    ESP_LOGI(TAG, "label: '%s', label_idx: %u, prob: %f, inf_time: %lldms",
+                             fbank_label_idx_to_str(label), label, prob, ts / 1000);
+                    if (prob >= DETECTION_THRESHOLD)
                     {
                         ESP_LOGI(TAG, "Detection above threshold");
                         debounce_count = 3;
