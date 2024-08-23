@@ -48,9 +48,9 @@
 
 #define BOARD_LCD_PIXEL_CLOCK_HZ (60 * 1000 * 1000)
 
+#define CHUNK_READ_SIZE (SHARNN_BRICK_SIZE * FRAME_STEP)
 #define FRAME_OFFSET (FRAME_LEN - FRAME_STEP)
-#define CHUNK_SIZE ((SHARNN_BRICK_SIZE * FRAME_STEP) + (FRAME_OFFSET))
-#define CHUNK_READ_SIZE (CHUNK_SIZE - FRAME_OFFSET)
+#define CHUNK_SIZE (CHUNK_READ_SIZE + FRAME_OFFSET)
 
 #define DETECTION_THRESHOLD (0.85f)
 
@@ -84,7 +84,7 @@ static const uint16_t palette[256] = {
 // clang-format on
 
 static i2s_chan_handle_t rx_chan;
-static int32_t r_buf[2][CHUNK_SIZE];
+static int32_t r_buf[2][CHUNK_READ_SIZE];
 static float input[CHUNK_SIZE];
 static float features[SHARNN_BRICK_SIZE][NUM_FILT];
 
@@ -319,7 +319,7 @@ static void mic_stream_task(void *args)
 
     while (true)
     {
-        if (i2s_channel_read(rx_chan, &r_buf[hand][FRAME_OFFSET], CHUNK_READ_SIZE * sizeof(int32_t), &r_bytes, 500) == ESP_OK)
+        if (i2s_channel_read(rx_chan, r_buf[hand], CHUNK_READ_SIZE * sizeof(int32_t), &r_bytes, 500) == ESP_OK)
         {
             assert(r_bytes == (CHUNK_READ_SIZE * sizeof(int32_t)));
 
@@ -406,21 +406,21 @@ void app_main(void)
             ESP_LOGD(TAG, "Received mic data");
             ts = esp_timer_get_time();
 
-            for (size_t i = FRAME_OFFSET; i < CHUNK_SIZE; i++)
+            for (size_t i = 0; i < CHUNK_READ_SIZE; i++)
             {
-                input[i] = (float)(data[i]);
-                input[i] /= (1UL << 24);
-                input[i] *= 0.1;
+                input[FRAME_OFFSET + i] = (float)(data[i]);
+                input[FRAME_OFFSET + i] /= (1UL << 24);
+                input[FRAME_OFFSET + i] *= 0.1;
             }
 
-            fbank_prep(input, CHUNK_SIZE);
+            fbank_prep(&input[FRAME_OFFSET], CHUNK_READ_SIZE);
             float rssi = fbank_get_rssi();
             fbank(input, features, CHUNK_SIZE);
 
             sha_rnn_norm(features);
             sha_rnn_process(features, &prob, &label);
 
-            memmove(input, &input[CHUNK_SIZE - FRAME_OFFSET], FRAME_OFFSET * sizeof(float));
+            memmove(input, &input[CHUNK_READ_SIZE], FRAME_OFFSET * sizeof(float));
 
             ts = esp_timer_get_time() - ts;
             ESP_LOGD(TAG, "Infer took %lld ms", ts / 1000);
