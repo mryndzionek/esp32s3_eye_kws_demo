@@ -410,7 +410,7 @@ void app_main(void)
             {
                 input[FRAME_OFFSET + i] = (float)(data[i]);
                 input[FRAME_OFFSET + i] /= (1UL << 24);
-                input[FRAME_OFFSET + i] *= 0.1;
+                input[FRAME_OFFSET + i] *= 0.2;
             }
 
             fbank_prep(&input[FRAME_OFFSET], CHUNK_READ_SIZE);
